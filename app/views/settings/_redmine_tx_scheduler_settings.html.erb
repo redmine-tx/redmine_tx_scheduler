@@ -1,0 +1,387 @@
+<fieldset class="box">
+  <legend>등록된 스케줄러 작업</legend>
+  
+  <div style="margin-bottom: 10px;">
+    <% 
+      migration_error = RedmineScheduler.migration_required?
+      registered_tasks = RedmineScheduler.all_tasks_info
+    %>
+    
+    <% if migration_error %>
+      <div class="flash error">
+        <strong>⚠️ 마이그레이션 필요</strong><br>
+        스케줄러 플러그인 테이블이 생성되지 않았습니다.<br>
+        다음 명령을 실행하세요:<br>
+        <code style="background: #f5f5f5; padding: 2px 4px; margin-top: 5px; display: inline-block;">
+          bundle exec rake redmine:plugins:migrate NAME=redmine_tx_scheduler RAILS_ENV=<%= Rails.env %>
+        </code>
+      </div>
+    <% elsif registered_tasks.any? %>
+      <div class="flash notice">
+        <strong><%= registered_tasks.count %>개의 스케줄러 작업이 등록되어 있습니다.</strong>
+        <% recently_executed = registered_tasks.select { |task| task[:recently_executed] } %>
+        <% if recently_executed.any? %>
+          (<%= recently_executed.count %>개가 최근에 실행됨)
+        <% end %>
+      </div>
+    <% else %>
+      <div class="flash warning">
+        등록된 스케줄러 작업이 없습니다.
+      </div>
+    <% end %>
+  </div>
+
+  <% if registered_tasks.any? && !migration_error %>
+    <table class="list" style="margin-top: 15px;">
+      <thead>
+        <tr>
+          <th>작업명</th>
+          <th>설명</th>
+          <th>실행 주기</th>
+          <th>실행 횟수</th>
+          <th>마지막 실행</th>
+          <th>상태</th>
+          <th>관리</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% registered_tasks.each do |task| %>
+          <tr class="<%= cycle('odd', 'even') %>">
+            <td>
+              <strong><%= task[:name] %></strong>
+            </td>
+            <td>
+              <%= task[:description] || task[:name] %>
+            </td>
+            <td class="center">
+              <% if task[:schedule_type] == 'cron' %>
+                <span class="badge" style="background-color: #4CAF50; color: white; padding: 2px 6px; border-radius: 3px;">
+                  <%= task[:cron_human_readable] || task[:cron_expression] %>
+                </span>
+                <br>
+                <small style="color: #666;">
+                  cron: <%= task[:cron_expression] %>
+                </small>
+              <% else %>
+                <span class="badge" style="background-color: #9C27B0; color: white; padding: 2px 6px; border-radius: 3px;">
+                  <%= task[:period_in_words] || "5분" %>
+                </span>
+                <br>
+                <small style="color: #666;">
+                  (<%= task[:period_seconds] || 300 %>초)
+                </small>
+              <% end %>
+            </td>
+            <td class="center">
+              <span class="badge" style="background-color: #FF9800; color: white; padding: 2px 6px; border-radius: 3px;">
+                <%= task[:execution_count] %>회
+              </span>
+            </td>
+            <td>
+              <% if task[:last_executed_at] %>
+                <% last_execution_at = task[:last_executed_at].is_a?(Time) ? task[:last_executed_at] : Time.parse(task[:last_executed_at].to_s) %>
+                <%= format_time(last_execution_at) %>
+                <br>
+                <small style="color: #666;">
+                  <%= time_ago_in_words(last_execution_at) %> 전
+                </small>
+              <% else %>
+                <span style="color: #999;">아직 실행되지 않음</span>
+              <% end %>
+            </td>
+            <td class="center">
+              <% if task[:recently_executed] %>
+                <span style="color: #4CAF50; font-weight: bold;">
+                  ● 최근 실행됨
+                </span>
+                <br>
+                <small style="color: #666;">주기 내</small>
+              <% else %>
+                <span style="color: #666; font-weight: bold;">
+                  ● 대기중
+                </span>
+                <br>
+                <% if task[:next_executable_at] %>
+                  <% next_exec = task[:next_executable_at].is_a?(Time) ? task[:next_executable_at] : Time.parse(task[:next_executable_at].to_s) %>
+                  <small style="color: #666;">
+                    <%= time_ago_in_words(next_exec) %> 후 실행 가능
+                  </small>
+                <% else %>
+                  <small style="color: #666;">즉시 실행 가능</small>
+                <% end %>
+              <% end %>
+            </td>
+            <td class="center">
+              <button type="button" onclick="executeTask('<%= task[:name] %>');" class="button-small" style="background-color: #2196F3; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">
+                ▶ 지금 실행
+              </button>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+
+    <div style="margin-top: 15px; padding: 10px; background-color: #f5f5f5; border-radius: 5px;">
+      <h4 style="margin-top: 0;">작업 통계</h4>
+      <div class="flex-container" style="display: flex; gap: 20px; flex-wrap: wrap;">
+        <div class="stat-item" style="background: white; padding: 10px; border-radius: 5px; flex: 1; min-width: 150px;">
+          <div style="font-size: 24px; font-weight: bold; color: #4CAF50;"><%= registered_tasks.count %></div>
+          <div style="color: #666; font-size: 12px;">등록된 작업</div>
+        </div>
+        <div class="stat-item" style="background: white; padding: 10px; border-radius: 5px; flex: 1; min-width: 150px;">
+          <div style="font-size: 24px; font-weight: bold; color: #FF9800;"><%= registered_tasks.sum { |task| task[:execution_count] || 0 } %></div>
+          <div style="color: #666; font-size: 12px;">총 실행 횟수</div>
+        </div>
+        <div class="stat-item" style="background: white; padding: 10px; border-radius: 5px; flex: 1; min-width: 150px;">
+          <div style="font-size: 24px; font-weight: bold; color: #2196F3;">
+            <% recently_executed_count = registered_tasks.count { |task| task[:recently_executed] } %>
+            <%= recently_executed_count %>
+          </div>
+          <div style="color: #666; font-size: 12px;">최근 실행된 작업</div>
+        </div>
+        <div class="stat-item" style="background: white; padding: 10px; border-radius: 5px; flex: 1; min-width: 150px;">
+          <div style="font-size: 24px; font-weight: bold; color: #9C27B0;">
+            <% executed_tasks = registered_tasks.select { |task| task[:last_executed_at] } %>
+            <% if executed_tasks.any? %>
+              <% last_execution = executed_tasks.map { |task| task[:last_executed_at] }.max %>
+              <% last_execution = last_execution.is_a?(Time) ? last_execution : Time.parse(last_execution.to_s) %>
+              <%= time_ago_in_words(last_execution) %> 전
+            <% else %>
+              없음
+            <% end %>
+          </div>
+          <div style="color: #666; font-size: 12px;">마지막 실행</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 15px; text-align: right;">
+      <button type="button" onclick="location.reload();" class="button-small" style="background-color: #2196F3; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">
+        🔄 새로고침
+      </button>
+    </div>
+  <% end %>
+
+  <!-- API 테스트 섹션 추가 -->
+  <% if registered_tasks.any? && !migration_error %>
+    <div style="margin-top: 20px; padding: 10px; background-color: #f0f8ff; border-radius: 5px; border-left: 4px solid #2196F3;">
+      <h4 style="margin-top: 0; color: #2196F3;">⚙️ API 테스트</h4>
+      <p style="margin: 5px 0; color: #666; font-size: 14px;">
+        스케줄러 API를 수동으로 테스트할 수 있습니다 (외부 cron 호출과 동일).
+      </p>
+      <div style="margin-top: 10px;">
+        <button type="button" onclick="testPingAPI();" style="background-color: #4CAF50; color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer; margin-right: 10px;">
+          📡 Ping 테스트
+        </button>
+        <button type="button" onclick="testStatusAPI();" style="background-color: #FF9800; color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer;">
+          📊 상태 조회
+        </button>
+      </div>
+      <div id="api-test-result" style="margin-top: 10px; padding: 10px; background-color: white; border-radius: 3px; display: none;">
+        <strong>테스트 결과:</strong>
+        <pre id="api-result-content" style="margin: 5px 0; font-size: 12px; color: #333; white-space: pre-wrap;"></pre>
+      </div>
+    </div>
+  <% end %>
+</fieldset>
+
+<fieldset class="box" style="margin-top: 20px;">
+  <legend>스케줄러 설정</legend>
+  
+  <div style="padding: 15px;">
+    <label style="display: flex; align-items: center; gap: 8px;">
+      <%= check_box_tag 'settings[tx_scheduler_disabled]', '1', Setting.plugin_redmine_tx_scheduler['tx_scheduler_disabled'] %>
+      <span>스케줄러 비활성화</span>
+      <small style="color: #666; margin-left: 10px;">
+        (체크하면 모든 스케줄러 작업이 중지됩니다)
+      </small>
+    </label>
+  </div>
+</fieldset>
+
+<script>
+// API 테스트 함수들
+function testPingAPI() {
+  const resultDiv = document.getElementById('api-test-result');
+  const contentPre = document.getElementById('api-result-content');
+  
+  resultDiv.style.display = 'block';
+  contentPre.textContent = '테스트 중...';
+  
+  fetch('/scheduler/ping', {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    contentPre.textContent = JSON.stringify(data, null, 2);
+    if (data.success) {
+      resultDiv.style.borderLeft = '4px solid #4CAF50';
+    } else {
+      resultDiv.style.borderLeft = '4px solid #f44336';
+    }
+    // 성공시 페이지 새로고침 (통계 업데이트)
+    if (data.success) {
+      setTimeout(() => location.reload(), 2000);
+    }
+  })
+  .catch(error => {
+    contentPre.textContent = 'Error: ' + error.message;
+    resultDiv.style.borderLeft = '4px solid #f44336';
+  });
+}
+
+function testStatusAPI() {
+  const resultDiv = document.getElementById('api-test-result');
+  const contentPre = document.getElementById('api-result-content');
+  
+  resultDiv.style.display = 'block';
+  contentPre.textContent = '조회 중...';
+  
+  fetch('/scheduler/status', {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    contentPre.textContent = JSON.stringify(data, null, 2);
+    if (data.success) {
+      resultDiv.style.borderLeft = '4px solid #4CAF50';
+    } else {
+      resultDiv.style.borderLeft = '4px solid #f44336';
+    }
+  })
+  .catch(error => {
+    contentPre.textContent = 'Error: ' + error.message;
+    resultDiv.style.borderLeft = '4px solid #f44336';
+  });
+}
+
+function executeTask(taskName) {
+  if (!confirm('\'' + taskName + '\' 작업을 지금 실행하시겠습니까?')) {
+    return;
+  }
+
+  const resultDiv = document.getElementById('api-test-result');
+  const contentPre = document.getElementById('api-result-content');
+  
+  // API 결과 영역이 숨겨져 있을 수 있으므로 표시
+  if (resultDiv) {
+    resultDiv.style.display = 'block';
+    contentPre.textContent = taskName + ' 실행 요청 중...';
+    // 스크롤 이동
+    resultDiv.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+  const headers = {
+    'Content-Type': 'application/json'
+  };
+  if (csrfToken) {
+    headers['X-CSRF-Token'] = csrfToken;
+  }
+
+  fetch('/scheduler/execute/' + encodeURIComponent(taskName), {
+    method: 'POST',
+    headers: headers,
+    body: JSON.stringify({ force: true })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (resultDiv && contentPre) {
+      contentPre.textContent = JSON.stringify(data, null, 2);
+      if (data.success) {
+        resultDiv.style.borderLeft = '4px solid #4CAF50';
+      } else {
+        resultDiv.style.borderLeft = '4px solid #f44336';
+      }
+    } else {
+      alert(data.success ? '실행 성공' : '실행 실패: ' + data.message);
+    }
+    
+    // 성공시 페이지 새로고침
+    if (data.success) {
+      setTimeout(() => location.reload(), 2000);
+    }
+  })
+  .catch(error => {
+    const errorMsg = 'Error: ' + error.message;
+    if (resultDiv && contentPre) {
+      contentPre.textContent = errorMsg;
+      resultDiv.style.borderLeft = '4px solid #f44336';
+    } else {
+      alert(errorMsg);
+    }
+  });
+}
+
+
+// 자동 새로고침 (60초마다, ping API 방식에서는 자주 새로고침할 필요 없음)
+setInterval(function() {
+  if (document.getElementById('tab-redmine_tx_scheduler') && 
+      document.getElementById('tab-redmine_tx_scheduler').classList.contains('selected')) {
+    // 현재 탭이 활성화된 경우에만 새로고침
+    location.reload();
+  }
+}, 60000);
+</script>
+
+<style>
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: bold;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+.stat-item {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  transition: transform 0.2s;
+}
+
+.stat-item:hover {
+  transform: translateY(-2px);
+}
+
+/* API 테스트 섹션 스타일 */
+#api-test-result {
+  border: 1px solid #ddd;
+  transition: border-left 0.3s ease;
+}
+
+#api-test-result pre {
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: #f8f9fa;
+  padding: 8px;
+  border-radius: 3px;
+  border: 1px solid #e9ecef;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .flex-container {
+    flex-direction: column;
+  }
+  
+  table.list {
+    font-size: 12px;
+  }
+  
+  table.list th, table.list td {
+    padding: 5px 3px;
+  }
+  
+  /* 모바일에서 API 테스트 버튼 스타일 */
+  button {
+    width: 100%;
+    margin-bottom: 5px;
+  }
+}
+</style>
