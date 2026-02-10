@@ -39,7 +39,7 @@
           <th>설명</th>
           <th>실행 주기</th>
           <th>실행 횟수</th>
-          <th>마지막 실행</th>
+          <th>마지막 시도</th>
           <th>상태</th>
           <th>관리</th>
         </tr>
@@ -78,7 +78,21 @@
               </span>
             </td>
             <td>
-              <% if task[:last_executed_at] %>
+              <% if task[:last_attempted_at] %>
+                <% last_attempt = task[:last_attempted_at].is_a?(Time) ? task[:last_attempted_at] : Time.parse(task[:last_attempted_at].to_s) %>
+                <%= format_time(last_attempt) %>
+                <br>
+                <small style="color: #666;">
+                  <%= time_ago_in_words(last_attempt) %> 전
+                </small>
+                <% if task[:last_executed_at] && task[:last_attempted_at] != task[:last_executed_at] %>
+                  <% last_success = task[:last_executed_at].is_a?(Time) ? task[:last_executed_at] : Time.parse(task[:last_executed_at].to_s) %>
+                  <br>
+                  <small style="color: #4CAF50;">
+                    마지막 성공: <%= time_ago_in_words(last_success) %> 전
+                  </small>
+                <% end %>
+              <% elsif task[:last_executed_at] %>
                 <% last_execution_at = task[:last_executed_at].is_a?(Time) ? task[:last_executed_at] : Time.parse(task[:last_executed_at].to_s) %>
                 <%= format_time(last_execution_at) %>
                 <br>
@@ -90,25 +104,35 @@
               <% end %>
             </td>
             <td class="center">
-              <% if task[:recently_executed] %>
+              <% if task[:last_status] == 'error' %>
+                <span style="color: #f44336; font-weight: bold;">
+                  ● 실패
+                </span>
+                <% if task[:last_error].present? %>
+                  <br>
+                  <small style="color: #f44336;" title="<%= h(task[:last_error]) %>">
+                    <%= truncate(task[:last_error], length: 40) %>
+                  </small>
+                <% end %>
+              <% elsif task[:last_status] == 'success' %>
                 <span style="color: #4CAF50; font-weight: bold;">
-                  ● 최근 실행됨
+                  ● 성공
                 </span>
                 <br>
-                <small style="color: #666;">주기 내</small>
-              <% else %>
-                <span style="color: #666; font-weight: bold;">
-                  ● 대기중
-                </span>
-                <br>
-                <% if task[:next_executable_at] %>
+                <% if task[:recently_executed] %>
+                  <small style="color: #666;">주기 내</small>
+                <% elsif task[:next_executable_at] %>
                   <% next_exec = task[:next_executable_at].is_a?(Time) ? task[:next_executable_at] : Time.parse(task[:next_executable_at].to_s) %>
                   <small style="color: #666;">
-                    <%= time_ago_in_words(next_exec) %> 후 실행 가능
+                    <%= time_ago_in_words(next_exec) %> 후 실행
                   </small>
-                <% else %>
-                  <small style="color: #666;">즉시 실행 가능</small>
                 <% end %>
+              <% else %>
+                <span style="color: #999; font-weight: bold;">
+                  ● 미실행
+                </span>
+                <br>
+                <small style="color: #999;">대기중</small>
               <% end %>
             </td>
             <td class="center">
@@ -138,6 +162,11 @@
             <%= recently_executed_count %>
           </div>
           <div style="color: #666; font-size: 12px;">최근 실행된 작업</div>
+        </div>
+        <% failed_tasks_count = registered_tasks.count { |task| task[:last_status] == 'error' } %>
+        <div class="stat-item" style="background: white; padding: 10px; border-radius: 5px; flex: 1; min-width: 150px; <%= 'border: 2px solid #f44336;' if failed_tasks_count > 0 %>">
+          <div style="font-size: 24px; font-weight: bold; color: <%= failed_tasks_count > 0 ? '#f44336' : '#4CAF50' %>;"><%= failed_tasks_count %></div>
+          <div style="color: #666; font-size: 12px;">실패 중인 작업</div>
         </div>
         <div class="stat-item" style="background: white; padding: 10px; border-radius: 5px; flex: 1; min-width: 150px;">
           <div style="font-size: 24px; font-weight: bold; color: #9C27B0;">

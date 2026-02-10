@@ -14,11 +14,23 @@ class SchedulerTaskStat < ApplicationRecord
   scope :ordered_by_name, -> { order(:task_name) }
   scope :ordered_by_last_execution, -> { order(last_executed_at: :desc) }
 
-  # 작업 실행 기록
+  # 작업 실행 기록 (성공 시)
   def record_execution!
     update!(
       last_executed_at: Time.now,
+      last_attempted_at: Time.now,
+      last_status: 'success',
+      last_error: nil,
       execution_count: execution_count + 1
+    )
+  end
+
+  # 작업 실패 기록 (last_executed_at, execution_count는 변경하지 않음)
+  def record_failure!(error_message)
+    update!(
+      last_attempted_at: Time.now,
+      last_status: 'error',
+      last_error: error_message.to_s.truncate(5000)
     )
   end
 
@@ -107,6 +119,9 @@ class SchedulerTaskStat < ApplicationRecord
       description: description,
       schedule_type: schedule_type,
       last_executed_at: last_executed_at,
+      last_attempted_at: last_attempted_at,
+      last_status: last_status,
+      last_error: last_error,
       execution_count: execution_count,
       recently_executed: recently_executed?,
       next_executable_at: next_executable_at,

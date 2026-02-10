@@ -334,7 +334,9 @@ module RedmineScheduler
       rescue => e
         Rails.logger.error "RedmineScheduler: Task '#{@name}' failed: #{e.message}"
         Rails.logger.error e.backtrace.join("\n")
-        
+
+        stat.record_failure!(e.message)
+
         { success: false, error: e.message, executed_at: Time.now }
       end
     end
@@ -477,12 +479,15 @@ module RedmineScheduler
             name: name,
             description: task.description,
             last_executed_at: nil,
+            last_attempted_at: nil,
+            last_status: nil,
+            last_error: nil,
             execution_count: 0,
             recently_executed: false,
             next_executable_at: task.next_execution_time,
             seconds_until_next_execution: 0
           }
-          
+
           if task.cron_expression
             info[:schedule_type] = 'cron'
             info[:cron_expression] = task.cron_expression
@@ -492,18 +497,18 @@ module RedmineScheduler
             info[:period_seconds] = task.period_seconds
             info[:period_in_words] = format_period_in_words(task.period_seconds)
           end
-          
+
           info
         end
       end
-      
+
       # 테이블이 존재하면 DB에서 통계 조회
       db_stats = SchedulerTaskStat.where(task_name: registered_names)
-      
+
       registered_names.map do |name|
         task = tasks[name]
         stat = db_stats.find { |s| s.task_name == name }
-        
+
         if stat
           stat.to_info_hash
         else
@@ -512,12 +517,15 @@ module RedmineScheduler
             name: name,
             description: task.description,
             last_executed_at: nil,
+            last_attempted_at: nil,
+            last_status: nil,
+            last_error: nil,
             execution_count: 0,
             recently_executed: false,
             next_executable_at: task.next_execution_time,
             seconds_until_next_execution: 0
           }
-          
+
           if task.cron_expression
             info[:schedule_type] = 'cron'
             info[:cron_expression] = task.cron_expression
@@ -527,7 +535,7 @@ module RedmineScheduler
             info[:period_seconds] = task.period_seconds
             info[:period_in_words] = format_period_in_words(task.period_seconds)
           end
-          
+
           info
         end
       end
