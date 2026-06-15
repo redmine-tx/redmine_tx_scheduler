@@ -225,10 +225,35 @@
         (체크하면 모든 스케줄러 작업이 중지됩니다)
       </small>
     </label>
+
+    <div style="margin-top: 15px;">
+      <label for="settings_tx_scheduler_api_token" style="display: block; font-weight: bold; margin-bottom: 5px;">
+        스케줄러 API 인증 토큰
+      </label>
+      <%= password_field_tag 'settings[tx_scheduler_api_token]',
+                             Setting.plugin_redmine_tx_scheduler['tx_scheduler_api_token'],
+                             id: 'settings_tx_scheduler_api_token',
+                             size: 60,
+                             autocomplete: 'new-password' %>
+      <p class="info" style="margin-top: 5px;">
+        비워두면 기존처럼 인증 없이 동작합니다. 값을 설정하면 <code>/scheduler/ping</code>, <code>/scheduler/status</code>, <code>/scheduler/execute</code> 호출에
+        <code>X-Redmine-Scheduler-Token</code> 헤더 또는 <code>token</code> 파라미터가 필요합니다.
+      </p>
+    </div>
   </div>
 </fieldset>
 
 <script>
+const schedulerApiToken = '<%= j Setting.plugin_redmine_tx_scheduler['tx_scheduler_api_token'].to_s %>';
+
+function schedulerHeaders(baseHeaders) {
+  const headers = Object.assign({}, baseHeaders || {});
+  if (schedulerApiToken.length > 0) {
+    headers['X-Redmine-Scheduler-Token'] = schedulerApiToken;
+  }
+  return headers;
+}
+
 // API 테스트 함수들
 function testPingAPI() {
   const resultDiv = document.getElementById('api-test-result');
@@ -239,9 +264,9 @@ function testPingAPI() {
   
   fetch('/scheduler/ping', {
     method: 'GET',
-    headers: {
+    headers: schedulerHeaders({
       'Content-Type': 'application/json'
-    }
+    })
   })
   .then(response => response.json())
   .then(data => {
@@ -271,9 +296,9 @@ function testStatusAPI() {
   
   fetch('/scheduler/status', {
     method: 'GET',
-    headers: {
+    headers: schedulerHeaders({
       'Content-Type': 'application/json'
-    }
+    })
   })
   .then(response => response.json())
   .then(data => {
@@ -307,9 +332,9 @@ function executeTask(taskName) {
   }
 
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-  const headers = {
+  const headers = schedulerHeaders({
     'Content-Type': 'application/json'
-  };
+  });
   if (csrfToken) {
     headers['X-CSRF-Token'] = csrfToken;
   }

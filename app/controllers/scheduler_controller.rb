@@ -1,3 +1,5 @@
+require 'digest'
+
 class SchedulerController < ApplicationController
   # 모든 인증과 권한 확인을 건너뛰기
   skip_before_action :session_expiration, :user_setup, :check_if_login_required, 
@@ -5,6 +7,7 @@ class SchedulerController < ApplicationController
   
   # API 액션들에 대해 API 인증 허용
   accept_api_auth :ping, :status, :execute_task
+  before_action :require_scheduler_token, only: [:ping, :status, :execute_task]
   
   # ping API - 외부 cron에서 호출
   def ping
@@ -185,5 +188,38 @@ class SchedulerController < ApplicationController
   def plugin_disabled?
     Setting.plugin_redmine_tx_scheduler['tx_scheduler_disabled'] == '1' || 
     Setting.plugin_redmine_tx_scheduler['tx_scheduler_disabled'] == true
+  end
+
+  def require_scheduler_token
+    expected_token = scheduler_api_token
+    return true if expected_token.blank?
+
+    supplied_token = request.headers['X-Redmine-Scheduler-Token'].presence || params[:token].presence
+    return true if secure_token_match?(expected_token, supplied_token)
+
+    response_data = {
+      success: false,
+      message: 'Unauthorized scheduler request',
+      timestamp: Time.current
+    }
+
+    respond_to do |format|
+      format.json { render json: response_data, status: :unauthorized }
+      format.html { render plain: response_data.to_json, status: :unauthorized }
+      format.any { render plain: response_data.to_json, status: :unauthorized }
+    end
+  end
+
+  def scheduler_api_token
+    Setting.plugin_redmine_tx_scheduler['tx_scheduler_api_token'].to_s
+  end
+
+  def secure_token_match?(expected_token, supplied_token)
+    return false if supplied_token.blank?
+
+    ActiveSupport::SecurityUtils.secure_compare(
+      Digest::SHA256.hexdigest(supplied_token.to_s),
+      Digest::SHA256.hexdigest(expected_token.to_s)
+    )
   end
 end

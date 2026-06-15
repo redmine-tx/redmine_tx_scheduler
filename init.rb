@@ -7,7 +7,8 @@ Redmine::Plugin.register :redmine_tx_scheduler do
   author_url 'http://example.com/about'
 
   settings default: {
-    'tx_scheduler_disabled' => false
+    'tx_scheduler_disabled' => false,
+    'tx_scheduler_api_token' => nil
   }, partial: 'settings/redmine_tx_scheduler_settings'
 end
 

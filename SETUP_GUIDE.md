@@ -34,10 +34,10 @@ crontab -e
 
 ```bash
 # 매 5분마다 실행 (단순한 방법)
-*/5 * * * * curl -s http://your-redmine-server.com/scheduler/ping > /dev/null 2>&1
+*/5 * * * * curl -s -H "X-Redmine-Scheduler-Token: YOUR_TOKEN" http://your-redmine-server.com/scheduler/ping > /dev/null 2>&1
 
 # 또는 JSON 형식으로 요청
-*/5 * * * * curl -s -H "Content-Type: application/json" http://your-redmine-server.com/scheduler/ping.json > /dev/null 2>&1
+*/5 * * * * curl -s -H "Content-Type: application/json" -H "X-Redmine-Scheduler-Token: YOUR_TOKEN" http://your-redmine-server.com/scheduler/ping.json > /dev/null 2>&1
 ```
 
 ### 3. API 엔드포인트
@@ -45,6 +45,8 @@ crontab -e
 - **ping**: `GET /scheduler/ping` 또는 `GET /scheduler/ping.json` - 모든 등록된 작업 실행
 - **status**: `GET /scheduler/status` 또는 `GET /scheduler/status.json` - 스케줄러 상태 조회
 - **execute**: `POST /scheduler/execute/:task_name` 또는 `POST /scheduler/execute/:task_name.json` - 특정 작업 실행
+
+스케줄러 API 인증 토큰을 설정한 경우 모든 API 호출에 `X-Redmine-Scheduler-Token` 헤더 또는 `token` 파라미터가 필요합니다. 토큰을 비워두면 기존 무인증 호출과 호환됩니다.
 
 ### 4. 작업 등록
 
@@ -84,12 +86,12 @@ end
 
 ```bash
 # 단순한 방법
-curl -v http://your-redmine-server.com/scheduler/ping
-curl -v http://your-redmine-server.com/scheduler/status
+curl -v -H "X-Redmine-Scheduler-Token: YOUR_TOKEN" http://your-redmine-server.com/scheduler/ping
+curl -v -H "X-Redmine-Scheduler-Token: YOUR_TOKEN" http://your-redmine-server.com/scheduler/status
 
 # 또는 JSON 형식으로
-curl -v -H "Content-Type: application/json" http://your-redmine-server.com/scheduler/ping.json
-curl -v -H "Content-Type: application/json" http://your-redmine-server.com/scheduler/status.json
+curl -v -H "Content-Type: application/json" -H "X-Redmine-Scheduler-Token: YOUR_TOKEN" http://your-redmine-server.com/scheduler/ping.json
+curl -v -H "Content-Type: application/json" -H "X-Redmine-Scheduler-Token: YOUR_TOKEN" http://your-redmine-server.com/scheduler/status.json
 ```
 
 #### 로그 확인

@@ -7,6 +7,10 @@
 # Redmine 서버 URL 설정
 REDMINE_URL="http://localhost:3000"
 
+# 플러그인 설정의 스케줄러 API 인증 토큰과 같게 설정하세요.
+# 비워두면 기존 무인증 호출과 호환됩니다.
+SCHEDULER_TOKEN="${SCHEDULER_TOKEN:-}"
+
 # 로그 파일 경로
 LOG_FILE="/tmp/redmine_scheduler_cron.log"
 
@@ -16,7 +20,11 @@ TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 echo "[$TIMESTAMP] Starting scheduler ping..." >> $LOG_FILE
 
 # ping API 호출 (확장자 없이도 동작)
-RESPONSE=$(curl -s -w "HTTP_CODE:%{http_code}" "$REDMINE_URL/scheduler/ping")
+if [ -n "$SCHEDULER_TOKEN" ]; then
+    RESPONSE=$(curl -s -w "HTTP_CODE:%{http_code}" -H "X-Redmine-Scheduler-Token: $SCHEDULER_TOKEN" "$REDMINE_URL/scheduler/ping")
+else
+    RESPONSE=$(curl -s -w "HTTP_CODE:%{http_code}" "$REDMINE_URL/scheduler/ping")
+fi
 
 # HTTP 응답 코드 추출
 HTTP_CODE=$(echo "$RESPONSE" | grep -o 'HTTP_CODE:[0-9]*' | cut -d: -f2)
